@@ -15,12 +15,14 @@ function getMood(xp) {
   return           { emoji: '🤩', label: 'Obsessed',          msg: "You're literally my favorite person. Don't tell anyone." }
 }
 
-async function callClaude(apiKey, messages, system) {
+const API_KEY = import.meta.env.VITE_ANTHROPIC_KEY
+
+async function callClaude(messages, system) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': apiKey,
+      'x-api-key': API_KEY,
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
@@ -280,7 +282,6 @@ const GLOBAL_CSS = `
 export default function App() {
   const [petType,     setPetType]     = useState(() => localStorage.getItem('s_pt') || '')
   const [petName,     setPetName]     = useState(() => localStorage.getItem('s_pn') || '')
-  const [apiKey,      setApiKey]      = useState(() => localStorage.getItem('s_ak') || '')
   const [xp,          setXp]          = useState(() => +localStorage.getItem('s_xp') || 0)
   const [entries,     setEntries]     = useState(() => { try { return JSON.parse(localStorage.getItem('s_log') || '[]') } catch { return [] } })
   const [chatHistory, setChatHistory] = useState(() => { try { return JSON.parse(localStorage.getItem('s_chat') || '[]') } catch { return [] } })
@@ -288,7 +289,6 @@ export default function App() {
   const [step,        setStep]    = useState(1)
   const [tPet,        setTPet]    = useState('')
   const [tName,       setTName]   = useState('')
-  const [tKey,        setTKey]    = useState('')
   const [tab,         setTab]     = useState('pal')
   const [scanImg,     setScanImg] = useState(null)
   const [scanResult,  setScanResult] = useState(null)
@@ -310,7 +310,6 @@ export default function App() {
 
   useEffect(() => { if (petType) localStorage.setItem('s_pt', petType) }, [petType])
   useEffect(() => { if (petName) localStorage.setItem('s_pn', petName) }, [petName])
-  useEffect(() => { if (apiKey)  localStorage.setItem('s_ak', apiKey)  }, [apiKey])
   useEffect(() => { localStorage.setItem('s_xp',   String(xp))              }, [xp])
   useEffect(() => { localStorage.setItem('s_log',  JSON.stringify(entries))  }, [entries])
   useEffect(() => { localStorage.setItem('s_chat', JSON.stringify(chatHistory)) }, [chatHistory])
@@ -318,7 +317,7 @@ export default function App() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 4000) }
 
-  const isSetup = petType && petName && apiKey
+  const isSetup = petType && petName
   const pet  = PETS[petType] || PETS.fox
   const mood = getMood(xp)
   const today = new Date().toDateString()
@@ -330,7 +329,7 @@ export default function App() {
     return (
       <div className="onboard">
         <div className="step-dots">
-          {[1, 2, 3].map(s => <div key={s} className={`dot${step === s ? ' on' : ''}`} />)}
+          {[1, 2].map(s => <div key={s} className={`dot${step === s ? ' on' : ''}`} />)}
         </div>
 
         {step === 1 && <>
@@ -355,22 +354,12 @@ export default function App() {
           <div className="ob-sub">They'll be offended if you skip this part.</div>
           <input className="field" placeholder="Pepper, Biscuit, Kevin…" autoFocus
                  value={tName} onChange={e => setTName(e.target.value)}
-                 onKeyDown={e => e.key === 'Enter' && tName.trim() && setStep(3)} />
-          <button className="btn btn-p" disabled={!tName.trim()} onClick={() => setStep(3)}>That's the one →</button>
-          <button className="btn btn-s" onClick={() => setStep(1)}>← Back</button>
-        </>}
-
-        {step === 3 && <>
-          <div style={{ fontSize: 80 }}>{PETS[tPet]?.emoji}</div>
-          <div className="ob-heading">Anthropic API Key</div>
-          <div className="ob-sub">{tName.trim() || 'Your pal'} needs a brain. Grab a key at console.anthropic.com</div>
-          <input className="field" type="password" placeholder="sk-ant-…" autoFocus
-                 value={tKey} onChange={e => setTKey(e.target.value)} />
-          <button className="btn btn-p" disabled={tKey.trim().length < 20}
-                  onClick={() => { setPetType(tPet); setPetName(tName.trim()); setApiKey(tKey.trim()) }}>
+                 onKeyDown={e => e.key === 'Enter' && tName.trim() && (setPetType(tPet), setPetName(tName.trim()))} />
+          <button className="btn btn-p" disabled={!tName.trim()}
+                  onClick={() => { setPetType(tPet); setPetName(tName.trim()) }}>
             Let's go 🚀
           </button>
-          <button className="btn btn-s" onClick={() => setStep(2)}>← Back</button>
+          <button className="btn btn-s" onClick={() => setStep(1)}>← Back</button>
         </>}
 
         {toast && <div className="toast">{toast}</div>}
@@ -392,7 +381,7 @@ export default function App() {
       try {
         const base64    = dataUrl.split(',')[1]
         const mediaType = (file.type || 'image/jpeg')
-        const result    = await callClaude(apiKey, [{
+        const result    = await callClaude([{
           role: 'user',
           content: [
             { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
@@ -448,7 +437,7 @@ export default function App() {
     setChatHistory(next)
     setChatLoading(true)
     try {
-      const reply = await callClaude(apiKey, next,
+      const reply = await callClaude(next,
         `You are ${petName}, a ${petType} pet companion and snarky nutrition coach inside the Salty food tracking app.
 You care about the user's health but express it with wit, personality, and light attitude.
 Context: the user has logged ${todayCalories} kcal today across ${todayEntries.length} meals. Their total XP is ${xp}. Your current mood is "${mood.label}".
